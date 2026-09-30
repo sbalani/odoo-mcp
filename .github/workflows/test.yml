@@ -1,0 +1,37 @@
+name: Odoo 18 addon tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo_test_only
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Policy checks
+        run: python3 -m unittest discover -s tests -v
+      - name: Install addon and run Odoo integration tests
+        run: |
+          docker run --rm --network host \
+            -v "$PWD:/mnt/extra-addons:ro" \
+            odoo:18.0 odoo \
+            --db_host=127.0.0.1 --db_port=5432 --db_user=odoo --db_password=odoo_test_only \
+            -d mcp_test -i odoo_mcp --without-demo=all \
+            --test-enable --test-tags /odoo_mcp --stop-after-init --http-port=8069 \
+            --log-level=test 2>&1 | tee odoo-test.log
+          ! grep -Eq '(FAIL:|ERROR:|[1-9][0-9]* failed|[1-9][0-9]* error\(s\))' odoo-test.log
+          grep -Eq '[1-9][0-9]* test' odoo-test.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: odoo-test-log
+          path: odoo-test.log
