@@ -21,7 +21,9 @@ jobs:
         run: python3 -m unittest discover -s tests -v
       - name: Install addon and run Odoo integration tests
         run: |
+          set -o pipefail
           docker run --rm --network host \
+            -e HOST=127.0.0.1 -e PORT=5432 -e USER=odoo -e PASSWORD=odoo_test_only \
             -v "$PWD:/mnt/extra-addons:ro" \
             odoo:18.0 odoo \
             --db_host=127.0.0.1 --db_port=5432 --db_user=odoo --db_password=odoo_test_only \

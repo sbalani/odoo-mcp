@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta
+from unittest.mock import patch
 
 from odoo.tests import HttpCase, tagged
 from odoo.tests.common import new_test_user
@@ -60,3 +61,19 @@ class TestMcpHttp(HttpCase):
         self.assertTrue(result['isError'])
         result = self.rpc('tools/call', {'name': 'crm_create', 'arguments': {'values': {'name': 'Valid HTTP lead'}}}).json()['result']
         self.assertFalse(result['isError'], result)
+
+    def test_failure_after_write_rolls_back(self):
+        gateway_class = type(self.env['odoo.mcp.gateway'])
+        original = gateway_class._execute
+
+        def fail_after_write(gateway, name, args):
+            result = original(gateway, name, args)
+            if name == 'crm_create':
+                raise ValueError('Simulated failure after insert')
+            return result
+
+        with patch.object(gateway_class, '_execute', fail_after_write):
+            result = self.rpc('tools/call', {'name': 'crm_create', 'arguments': {
+                'values': {'name': 'Must roll back'}}}).json()['result']
+        self.assertTrue(result['isError'])
+        self.assertFalse(self.env['crm.lead'].search([('name', '=', 'Must roll back')]))
