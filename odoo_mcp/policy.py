@@ -28,6 +28,32 @@ CRM_FIELDS = {
     'stage_id': 'id', 'priority': 'text', 'probability': 'number',
     'expected_revenue': 'number', 'date_deadline': 'text', 'description': 'text',
 }
+CHAT_TARGETS = {
+    'channel': 'discuss.channel', 'crm': 'crm.lead', 'sale': 'sale.order',
+    'invoice': 'account.move', 'lot': 'stock.lot', 'transfer': 'stock.picking',
+    'todo': 'project.task',
+}
+
+
+def todo_values(values, creating=False):
+    from datetime import datetime
+    if not isinstance(values, dict) or not values:
+        raise ValueError('values must be a nonempty object')
+    if set(values) - {'name', 'description', 'priority', 'date_deadline'}:
+        raise ValueError('Only name, description, priority and date_deadline may be written')
+    if creating or 'name' in values:
+        text_value(values.get('name'), 'name', 256)
+    if 'description' in values and (not isinstance(values['description'], str) or len(values['description']) > 10000):
+        raise ValueError('description must be text up to 10000 characters')
+    if 'priority' in values and values['priority'] not in ('0', '1'):
+        raise ValueError('priority must be 0 or 1')
+    if 'date_deadline' in values and values['date_deadline'] is not False:
+        deadline = text_value(values['date_deadline'], 'date_deadline', 19)
+        if datetime.strptime(deadline, '%Y-%m-%d %H:%M:%S').strftime('%Y-%m-%d %H:%M:%S') != deadline:
+            raise ValueError('date_deadline must use YYYY-MM-DD HH:MM:SS in UTC, or false to clear')
+    return dict(values)
+
+
 VERSIONS = ('2025-03-26', '2025-06-18', '2025-11-25')
 MAX_BODY = 131072
 
@@ -126,8 +152,8 @@ READ_TOOLS = [
         'offset': {'type': 'integer', 'minimum': 0, 'maximum': 10000},
     }, ['resource']),
     tool('odoo_catalog', 'List exposed models, readable fields and effective write capabilities.', {}),
-    tool('odoo_messages', 'Read messages in a Discuss channel you belong to or CRM record you can read. Other record chatter is excluded.', {
-        'target': {'type': 'string', 'enum': ['channel', 'crm']}, 'id': ID,
+    tool('odoo_messages', 'Read messages in a joined Discuss channel or an allowed record thread: CRM, sale, invoice, lot, transfer, or your own To-do.', {
+        'target': {'type': 'string', 'enum': list(CHAT_TARGETS)}, 'id': ID,
         'limit': {'type': 'integer', 'minimum': 1, 'maximum': 100},
         'before_id': ID,
     }, ['target', 'id']),
@@ -139,9 +165,22 @@ CRM_TOOLS = [
     tool('crm_schedule_activity', 'Schedule an activity on a CRM record. Only ordinary todo-category activity types are supported.', {'id': ID, 'activity_type_id': ID, 'user_id': ID, 'summary': STRING, 'note': STRING, 'date_deadline': {'type': 'string', 'format': 'date'}}, ['id', 'activity_type_id', 'summary', 'date_deadline'], True),
     tool('crm_complete_activity', 'Complete one CRM activity and record feedback.', {'id': ID, 'feedback': STRING}, ['id'], True),
 ]
-CHAT_TOOLS = [tool('chat_post', 'Send a plain-text message to an existing Discuss channel you belong to, or add an internal note to CRM chatter. May notify members/followers.', {
-    'target': {'type': 'string', 'enum': ['channel', 'crm']}, 'id': ID, 'body': STRING,
+CHAT_TOOLS = [tool('chat_post', 'Send plain text to a joined Discuss channel or add an internal note to allowed record chatter. Business fields are unchanged. Odoo posting permissions apply; may notify members/followers.', {
+    'target': {'type': 'string', 'enum': list(CHAT_TARGETS)}, 'id': ID, 'body': STRING,
 }, ['target', 'id', 'body'], True)]
+
+
+TODO_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties': {
+    'name': {'type': 'string', 'minLength': 1, 'maxLength': 256},
+    'description': {'type': 'string', 'maxLength': 10000},
+    'priority': {'type': 'string', 'enum': ['0', '1']},
+    'date_deadline': {'anyOf': [{'type': 'string', 'description': 'UTC YYYY-MM-DD HH:MM:SS'}, {'const': False}]},
+}}
+TODO_TOOLS = [
+    tool('todo_create', 'Create a personal To-do assigned to yourself, with no project.', {'values': TODO_SCHEMA}, ['values'], True),
+    tool('todo_update', 'Edit your assigned personal To-do. Cannot reassign it or convert it into a project task.', {'id': ID, 'values': TODO_SCHEMA}, ['id', 'values'], True),
+    tool('todo_action', 'Complete, reopen or cancel your assigned personal To-do.', {'id': ID, 'action': {'type': 'string', 'enum': ['complete', 'reopen', 'cancel']}}, ['id', 'action'], True),
+]
 
 
 def validate_arguments(definition, args):

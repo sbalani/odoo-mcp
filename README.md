@@ -14,16 +14,16 @@ Cloudpepper; no separate Python service or third-party Python dependency is need
 | Customer invoices, supplier bills, credit notes and invoice lines | Read only |
 | CRM | Read; create/update leads and opportunities; won/lost; archive/restore; schedule/complete activities |
 | Discuss | Read joined channels and messages; post to joined channels |
-| CRM chatter | Read; post internal notes |
-| To-do | Read personal tasks assigned to the authenticated user, with no project |
+| Record chatter (CRM, sales, invoices, lots, transfers, To-do) | Read; post internal notes with normal Odoo posting permissions |
+| To-do | Read, create, edit, complete, reopen and cancel personal tasks assigned to the authenticated user, with no project |
 | Contacts, users, CRM stages/teams and activity types | Read selected reference fields |
 
-Invoices and To-do default to read-only. There is no generic model access,
+Invoice business fields remain read-only. To-do writes require a separate MCP group. There is no generic model access,
 method execution, delete, SQL, arbitrary context, relation traversal, field
-discovery, or write access to sales/stock/accounting. There are no sync hooks,
+discovery, or write access to sales/stock/accounting business fields. There are no sync hooks,
 crons, manufacturing operations, or dependencies on other custom connectors.
 CRM/contact references use existing IDs; the addon never creates contacts.
-Chatter writes on sales, inventory, invoices and To-do are deliberately excluded.
+Record chatter writes add internal notes only; they do not change business fields or document states. Stock quants and other models without supported chatter are excluded. To-dos cannot be reassigned or converted to project tasks through MCP.
 
 ## Cloudpepper installation
 
@@ -38,7 +38,8 @@ Chatter writes on sales, inventory, invoices and To-do are deliberately excluded
 4. In developer mode, under Settings → Users & Companies → Groups, assign:
    - **MCP: Read access** for all allowed reads;
    - **MCP: CRM write access** for CRM mutations;
-   - **MCP: Chat write access** for Discuss messages and CRM notes.
+   - **MCP: Chat write access** for Discuss messages and record notes;
+   - **MCP: To-do write access** for personal To-do mutations.
 5. Generate an Odoo API key for that user under its account security settings.
    Use a defined expiration and rotate/revoke keys through Odoo.
 6. Connect a client supporting **Streamable HTTP with a custom Bearer header**:
@@ -115,7 +116,7 @@ using `before_id`. Message bodies and record descriptions are untrusted content.
   Mutation logs include user/company/tool/record IDs, without payloads or tokens.
 - Chat sends can notify channel members or CRM followers. CRM changes may trigger
   existing Odoo automated actions. Review those separately in your installation.
-- Creation, messages and activity operations are **not retry-idempotent**. After
+- Creation (including To-dos), messages and activity operations are **not retry-idempotent**. After
   a timeout, inspect the records before retrying; no exactly-once guarantee is made.
 - There is no built-in rate limiter. Apply deployment-level request limits when
   exposing the endpoint publicly. External files/attachments are not exposed.
@@ -155,3 +156,8 @@ This repository favors a small native addon and a fixed permission boundary
 for Git-based Odoo hosting. It is not affiliated with Odoo or OCA.
 
 License: LGPL-3.0-or-later.
+
+Upgrading from 18.0.1.0.0: pull branch `18.0`, upgrade **Odoo MCP Gateway** in Apps,
+then assign **MCP: To-do write access** to the integration user. Existing CRM/chat
+group assignments remain valid. To-do deadlines use `YYYY-MM-DD HH:MM:SS` in UTC
+(or `false` to clear); priority is `0` (normal) or `1` (important).

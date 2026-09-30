@@ -14,4 +14,9 @@
         <field name="category_id" ref="base.module_category_hidden"/>
         <field name="implied_ids" eval="[(4, ref('group_mcp_user'))]"/>
     </record>
+    <record id="group_mcp_todo_write" model="res.groups">
+        <field name="name">MCP: To-do write access</field>
+        <field name="category_id" ref="base.module_category_hidden"/>
+        <field name="implied_ids" eval="[(4, ref('group_mcp_user'))]"/>
+    </record>
 </odoo>

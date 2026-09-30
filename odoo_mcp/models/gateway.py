@@ -3,12 +3,12 @@ from datetime import date
 
 from markupsafe import escape
 
-from odoo import models
+from odoo import Command, models
 from odoo.exceptions import AccessError, MissingError
 from odoo.osv import expression
 
-from ..policy import (CHAT_TOOLS, CRM_TOOLS, READ_TOOLS, RESOURCES, crm_values,
-                      integer, search_args, text_value, validate_arguments)
+from ..policy import (CHAT_TARGETS, CHAT_TOOLS, CRM_TOOLS, READ_TOOLS, RESOURCES, TODO_TOOLS, crm_values,
+                      integer, search_args, text_value, todo_values, validate_arguments)
 
 _logger = logging.getLogger(__name__)
 
@@ -28,6 +28,8 @@ class McpGateway(models.AbstractModel):
             result += CRM_TOOLS
         if self.env.user.has_group('odoo_mcp.group_mcp_chat_write'):
             result += CHAT_TOOLS
+        if self.env.user.has_group('odoo_mcp.group_mcp_todo_write'):
+            result += TODO_TOOLS
         return result
 
     def _record(self, model, record_id, operation='read'):
@@ -37,14 +39,21 @@ class McpGateway(models.AbstractModel):
         record.check_access(operation)
         return record
 
-    def _target(self, args, writing=False):
+    def _todo(self, record_id, operation='write'):
+        record = self._record('project.task', record_id, operation)
+        if record.project_id or self.env.user not in record.user_ids:
+            raise AccessError('Only your assigned personal To-dos are available.')
+        return record
+
+    def _target(self, args):
         target = args.get('target')
-        if target not in ('channel', 'crm'):
-            raise ValueError('target must be channel or crm')
-        record = self._record('discuss.channel' if target == 'channel' else 'crm.lead', args.get('id'),
-                              'write' if writing and target == 'crm' else 'read')
+        if not isinstance(target, str) or target not in CHAT_TARGETS:
+            raise ValueError('Unsupported message target')
+        record = self._todo(args.get('id'), 'read') if target == 'todo' else self._record(CHAT_TARGETS[target], args.get('id'))
         if target == 'channel' and not record.is_member:
             raise AccessError('You must be a member of this Discuss channel.')
+        if target == 'invoice' and record.move_type not in ('out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt'):
+            raise AccessError('Only invoices, bills, receipts and credit notes are available.')
         return record
 
     def _search(self, args):
@@ -151,8 +160,25 @@ class McpGateway(models.AbstractModel):
             activity_id = activity.id
             activity.action_feedback(feedback=escape(text_value(args.get('feedback', 'Completed via MCP'), 'feedback')))
             return {'id': activity_id, 'completed': True}
+        if name == 'todo_create':
+            values = todo_values(args['values'], True)
+            values.update({'project_id': False, 'parent_id': False,
+                           'user_ids': [Command.set([self.env.uid])]})
+            return {'id': self.env['project.task'].create(values).id}
+        if name == 'todo_update':
+            record = self._todo(args['id'])
+            record.write(todo_values(args['values']))
+            return {'id': record.id}
+        if name == 'todo_action':
+            states = {'complete': '1_done', 'reopen': '01_in_progress', 'cancel': '1_canceled'}
+            action = args['action']
+            if not isinstance(action, str) or action not in states:
+                raise ValueError('Unsupported To-do action')
+            record = self._todo(args['id'])
+            record.write({'state': states[action]})
+            return {'id': record.id, 'state': record.state}
         if name == 'chat_post':
-            record = self._target(args, writing=True)
+            record = self._target(args)
             message = record.message_post(body=escape(text_value(args['body'], 'body')),
                 message_type='comment', subtype_xmlid='mail.mt_comment' if args['target'] == 'channel' else 'mail.mt_note')
             return {'id': message.id}

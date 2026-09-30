@@ -31,10 +31,20 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(p.crm_values({'name': 'Valid'}, True), {'name': 'Valid'})
 
     def test_no_write_tools_for_protected_resources(self):
-        tools = p.READ_TOOLS + p.CRM_TOOLS + p.CHAT_TOOLS
+        tools = p.READ_TOOLS + p.CRM_TOOLS + p.CHAT_TOOLS + p.TODO_TOOLS
         mutations = [t['name'] for t in tools if not t['annotations']['readOnlyHint']]
-        self.assertTrue(all(n.startswith(('crm_', 'chat_')) for n in mutations))
+        self.assertTrue(all(n.startswith(('crm_', 'chat_', 'todo_')) for n in mutations))
         self.assertTrue(all(t['inputSchema']['additionalProperties'] is False for t in tools))
+
+    def test_todo_values_cannot_escape_personal_scope(self):
+        for values in [{'project_id': 1}, {'user_ids': [1]}, {'parent_id': 1},
+                       {'company_id': 1}, {'state': '1_done'}, {'priority': '3'},
+                       {'date_deadline': 'tomorrow'}, {'description': False}, {'name': ' '}]:
+            with self.subTest(values=values), self.assertRaises(ValueError):
+                p.todo_values(values)
+        self.assertEqual(p.todo_values({'name': 'Plan', 'date_deadline': False}, True),
+                         {'name': 'Plan', 'date_deadline': False})
+        p.todo_values({'date_deadline': '2030-01-01 12:30:00'})
 
     def test_default_search_is_bounded(self):
         self.assertEqual(p.search_args({'resource': 'inventory'})[-2:], (50, 0))
