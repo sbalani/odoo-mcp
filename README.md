@@ -21,7 +21,7 @@ Cloudpepper; no separate Python service or third-party Python dependency is need
 Invoice business fields remain read-only. To-do writes require a separate MCP group. There is no generic model access,
 method execution, delete, SQL, arbitrary context, relation traversal, field
 discovery, or write access to sales/stock/accounting business fields. There are no sync hooks,
-crons, manufacturing operations, or dependencies on other custom connectors.
+manufacturing operations or dependencies on other custom connectors. Expired OAuth state is cleaned up by Odoo autovacuum.
 CRM/contact references use existing IDs; the addon never creates contacts.
 Record chatter writes add internal notes only; they do not change business fields or document states. Stock quants and other models without supported chatter are excluded. To-dos cannot be reassigned or converted to project tasks through MCP.
 
@@ -40,7 +40,8 @@ Record chatter writes add internal notes only; they do not change business field
    - **MCP: CRM write access** for CRM mutations;
    - **MCP: Chat write access** for Discuss messages and record notes;
    - **MCP: To-do write access** for personal To-do mutations.
-5. Generate an Odoo API key for that user under its account security settings.
+5. For ChatGPT web, use the **OAuth setup below** instead of an API key. For
+   clients with custom-header support, generate an Odoo API key under that user's account security settings.
    Use a defined expiration and rotate/revoke keys through Odoo.
 6. Connect a client supporting **Streamable HTTP with a custom Bearer header**:
    - URL: `https://YOUR-ODOO-HOST/odoo_mcp/mcp`
@@ -52,10 +53,73 @@ multi-database servers), preserve Authorization headers, and serve HTTPS.
 Pushes make the addon available in GitHub; Cloudpepper still needs its configured
 pull/rebuild and initial installation. An updated addon may require an Apps upgrade.
 
-This server uses **preconfigured Odoo API keys**, not an OAuth authorization
-server. Clients that require interactive OAuth and cannot supply a Bearer header
-need an external authentication bridge; adding this URL alone will not provide OAuth.
-Legacy HTTP+SSE and stdio transports are not provided.
+The server supports **Odoo API keys** for custom-header clients and **OAuth
+with authorization code + PKCE** for ChatGPT web. Tokens/keys are never accepted
+in URL query parameters. Legacy HTTP+SSE and stdio transports are not provided.
+
+## ChatGPT web: OAuth setup (18.0.1.2.0+)
+
+1. Pull branch `18.0`, restart/rebuild Odoo, and **upgrade Odoo MCP Gateway in Apps**.
+   Upgrading loads the new OAuth models, access controls, and administration menu.
+2. As an Odoo administrator, ensure **Settings → Technical → Parameters → System
+   Parameters → `web.base.url`** is the canonical HTTPS origin, for example
+   `https://YOUR-ODOO-HOST` (no path or query). Set `web.base.url.freeze` to `True`
+   to keep alternate login hosts from changing OAuth's issuer. The hostname must
+   route to this database without a `?db=` parameter.
+3. Open **Settings → MCP → OAuth Clients → ChatGPT**. This pre-created client starts
+   disabled. Click **Generate / Rotate Client Secret**, confirm, and copy the secret
+   from the sticky notification. It is shown only once and stored only as a hash.
+   Copy the **Client ID** from the form too. Generating the secret enables the client.
+4. In ChatGPT web, create the custom MCP connection using:
+   - **MCP URL:** `https://YOUR-ODOO-HOST/odoo_mcp/mcp`
+   - **Authentication:** OAuth
+   - **OAuth Client ID / Client Secret:** values from step 3
+   - If manual endpoint fields appear, **Authorization URL:**
+     `https://YOUR-ODOO-HOST/odoo_mcp/oauth/authorize`; **Token URL:**
+     `https://YOUR-ODOO-HOST/odoo_mcp/oauth/token`
+   - Use the pre-registered/static client option, if offered. Leave dynamic client
+     registration and CIMD off: this addon deliberately supports pre-registration.
+5. The default allowed callback is
+   `https://chatgpt.com/connector_platform_oauth_redirect`. The server advertises
+   issuer identification and returns `iss` in success and denial callbacks. If
+   ChatGPT displays a different callback, replace/add that **exact HTTPS URL** in
+   the client's Allowed callbacks field. No wildcards are accepted.
+6. Connect in ChatGPT, sign in to Odoo **as the intended MCP user**, and review the
+   consent screen. This user must already have the normal application permissions
+   and MCP groups described above. Click **Allow connection**. ChatGPT receives
+   scoped tokens, not the Odoo password or a general-purpose Odoo API key.
+7. Select the Odoo connection in a new ChatGPT conversation and ask it to run
+   `odoo_catalog`. Depending on the consenting user's groups/scopes, it will see
+   up to 12 tools.
+
+An Odoo API key is **not** the OAuth client secret. The client secret identifies
+this ChatGPT connection; the interactive Odoo login chooses the user whose
+permissions will be applied. Existing API-key integrations continue to work.
+
+Administrators can revoke an individual consent at **Settings → MCP → OAuth
+Connections**, or disable the client to block all its tokens. Rotating the client
+secret revokes its existing consents, so update the secret in ChatGPT and reconnect.
+
+The OAuth discovery documents are public, contain no credentials or business data,
+and use addon-specific paths to avoid replacing another addon's OAuth endpoints:
+
+- `/.well-known/oauth-protected-resource/odoo_mcp/mcp`
+- `/.well-known/oauth-authorization-server/odoo_mcp/oauth`
+
+Access tokens last **15 minutes**. With `offline_access`, single-use refresh tokens
+rotate on each refresh and expire with consent after **30 days**. Reusing a consumed
+code or refresh token revokes its entire consent. Clients must serialize refreshes;
+a lost token response can require reconnecting. Codes expire after five minutes.
+Tokens are bound to the MCP URL, OAuth issuer, client, user, consented company and
+scopes. They are not Odoo API keys and cannot authenticate to Odoo's general RPC API.
+Removing user permissions or disabling a user/client also limits or blocks access.
+
+This is a narrowly scoped, built-in OAuth authorization flow for pre-registered
+clients; it is not a general identity provider. It supports `client_secret_post`
+and `client_secret_basic`, PKCE S256, issuer identification and revocation. It does
+not offer DCR, CIMD, OIDC identity claims, client-credentials grants, or tokens in URLs.
+Thus OIDC-dependent enterprise verified-domain policies are not supported.
+
 
 Example initialization (replace placeholders locally; do not commit a key):
 
@@ -97,17 +161,17 @@ using `before_id`. Message bodies and record descriptions are untrusted content.
 
 ## Security and operational behavior
 
-- Each request authenticates an Odoo API key and executes with that user's ACLs
+- Each MCP request authenticates an Odoo API key or scoped OAuth token and executes with that user's ACLs
   and record rules. MCP also requires its own groups and rejects superuser mode.
-- HTTP requests use the user's default company, including shared records allowed
-  by Odoo. Change the integration user's default company or use separate users
-  for different companies; clients cannot supply an arbitrary company/context.
+- API-key requests use the user's default company. OAuth requests use the company
+  shown on the consent screen, and fail if the user loses access to it. Shared
+  records remain subject to Odoo rules. Clients cannot supply an arbitrary company/context.
 - **The read-only guarantee applies to this MCP endpoint.** An Odoo API key also
   works with Odoo's normal APIs and inherits the user's application permissions.
   Use a dedicated user with minimal Odoo rights; this addon does not restrict
   other API endpoints or other installed modules/automated actions.
-- The only `sudo()` call reads the canonical `web.base.url` for Origin validation;
-  business operations never elevate privileges. Browser Origin headers must
+- OAuth credential storage and canonical configuration reads use narrowly scoped
+  private `sudo()` helpers; business operations never elevate privileges. Browser Origin headers must
   match that configured URL. Server clients may omit Origin. No permissive CORS.
 - Stateless JSON responses support MCP versions 2025-03-26, 2025-06-18 and
   2025-11-25. Unsupported incoming protocol headers are rejected. GET and DELETE
@@ -131,7 +195,10 @@ python3 -m unittest discover -s tests -v
 
 GitHub Actions installs the addon in a clean Odoo 18 + PostgreSQL database and
 runs its ORM and HTTP integration tests (access boundaries, scopes, field
-compatibility, CRM lifecycle, chat membership, authentication and MCP requests).
+compatibility, CRM/To-do lifecycles, chat membership, authentication and MCP requests).
+OAuth tests cover discovery, consent/CSRF, PKCE, callback/resource/client binding,
+scopes, expiration, revocation, refresh/code replay, credential storage permissions,
+and preventing use of MCP OAuth tokens as general Odoo API keys.
 The same tests can run against an isolated local Odoo database:
 
 ```bash

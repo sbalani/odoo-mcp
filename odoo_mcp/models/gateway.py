@@ -18,17 +18,22 @@ class McpGateway(models.AbstractModel):
     _description = 'Restricted MCP tool dispatcher'
 
     def _check_member(self):
-        if self.env.su or not self.env.user.has_group('odoo_mcp.group_mcp_user'):
+        if (self.env.su or not self.env.user.has_group('odoo_mcp.group_mcp_user')
+                or (self.env.context.get('mcp_oauth_scopes') is not None
+                    and 'mcp.read' not in self.env.context['mcp_oauth_scopes'])):
             raise AccessError('MCP requires a non-superuser with MCP read access.')
 
     def _tools(self):
         self._check_member()
         result = list(READ_TOOLS)
-        if self.env.user.has_group('odoo_mcp.group_mcp_crm_write'):
+        oauth_scopes = self.env.context.get('mcp_oauth_scopes')
+        def permitted(scope):
+            return oauth_scopes is None or scope in oauth_scopes
+        if permitted('mcp.crm.write') and self.env.user.has_group('odoo_mcp.group_mcp_crm_write'):
             result += CRM_TOOLS
-        if self.env.user.has_group('odoo_mcp.group_mcp_chat_write'):
+        if permitted('mcp.chat.write') and self.env.user.has_group('odoo_mcp.group_mcp_chat_write'):
             result += CHAT_TOOLS
-        if self.env.user.has_group('odoo_mcp.group_mcp_todo_write'):
+        if permitted('mcp.todo.write') and self.env.user.has_group('odoo_mcp.group_mcp_todo_write'):
             result += TODO_TOOLS
         return result
 
