@@ -64,7 +64,7 @@ class TestGateway(TransactionCase):
 
     def test_chat_membership_and_plain_text(self):
         channel = self.env['discuss.channel'].create({'name': 'Private MCP', 'channel_type': 'group',
-            'channel_partner_ids': [(6, 0, self.writer.partner_id.ids)]})
+            'channel_partner_ids': [(4, self.writer.partner_id.id)]})
         result = self.gateway._call('chat_post', {'target': 'channel', 'id': channel.id, 'body': '<script>test</script>'})
         message = self.env['mail.message'].browse(result['id'])
         self.assertIn('&lt;script&gt;', message.body)

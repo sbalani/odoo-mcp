@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from odoo import http
 from odoo.exceptions import AccessError, MissingError, UserError, ValidationError
 from odoo.http import request
-from odoo.tools import date_utils
+from odoo.tools import json_default
 
 from ..policy import MAX_BODY, VERSIONS
 
@@ -14,7 +14,7 @@ _logger = logging.getLogger(__name__)
 
 
 def response(payload=None, status=200, headers=None):
-    return request.make_response('' if payload is None else json.dumps(payload, default=date_utils.json_default),
+    return request.make_response('' if payload is None else json.dumps(payload, default=json_default),
         status=status, headers=[('Content-Type', 'application/json'), ('Cache-Control', 'no-store'),
                                 ('X-Content-Type-Options', 'nosniff')] + (headers or []))
 
@@ -55,7 +55,8 @@ class McpController(http.Controller):
             return response({'error': 'Unsupported MCP protocol version'}, 400)
         if request.httprequest.content_length and request.httprequest.content_length > MAX_BODY:
             return response({'error': 'Request too large'}, 413)
-        raw = request.httprequest.stream.read(MAX_BODY + 1)
+        request.httprequest.max_content_length = MAX_BODY
+        raw = request.httprequest.get_data(cache=False)
         if len(raw) > MAX_BODY:
             return response({'error': 'Request too large'}, 413)
         try:
@@ -93,7 +94,7 @@ class McpController(http.Controller):
                 # Failed methods may already have written records. Roll back before returning isError.
                 with request.env.cr.savepoint():
                     data = gateway._call(name, params.get('arguments', {}))
-                    encoded = json.dumps(data, default=date_utils.json_default)
+                    encoded = json.dumps(data, default=json_default)
                 result = {'content': [{'type': 'text', 'text': encoded}], 'isError': False}
             except (AccessError, MissingError):
                 result = {'content': [{'type': 'text', 'text': 'Access denied or record unavailable.'}], 'isError': True}
