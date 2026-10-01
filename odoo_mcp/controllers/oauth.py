@@ -8,7 +8,7 @@ from odoo import http
 from odoo.exceptions import AccessError
 from odoo.http import request
 
-from ..oauth_utils import CODE_SECONDS, OAUTH_SCOPES, SCOPE_GROUPS, OAuthError, digest, scopes
+from ..oauth_utils import CODE_SECONDS, OAUTH_SCOPES, SCOPE_GROUPS, OAuthError, consent_csp, digest, scopes
 from .mcp import response
 
 
@@ -126,7 +126,7 @@ class McpOAuth(http.Controller):
             })
             res.headers.update({'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer',
                                 'X-Frame-Options': 'DENY',
-                                'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"})
+                                'Content-Security-Policy': consent_csp(params['redirect_uri'])})
             return res
         except AccessError:
             return response({'error': 'access_denied', 'error_description': 'This Odoo user needs MCP read access.'}, 403)

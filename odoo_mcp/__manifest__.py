@@ -1,6 +1,6 @@
 {
     'name': 'Odoo MCP Gateway',
-    'version': '18.0.1.2.0',
+    'version': '18.0.1.2.1',
     'summary': 'Scoped MCP access to sales, stock, invoices, CRM, Discuss and To-do',
     'license': 'LGPL-3',
     'depends': ['sale_management', 'stock', 'account', 'crm', 'mail', 'project_todo'],

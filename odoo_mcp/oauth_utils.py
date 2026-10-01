@@ -57,6 +57,17 @@ def redirect_uri(value):
     return value
 
 
+def consent_csp(callback_uri):
+    """Allow the validated client's callback through form-submit redirects."""
+    parsed = urlsplit(redirect_uri(callback_uri))
+    # Never interpolate callback paths/queries or CSP syntax into a header.
+    if not re.fullmatch(r'[A-Za-z0-9.\-:\[\]]+', parsed.netloc):
+        raise OAuthError('invalid_request', 'Invalid callback host.')
+    origin = 'https://' + parsed.netloc
+    return ("default-src 'none'; style-src 'unsafe-inline'; "
+            f"form-action 'self' {origin}; frame-ancestors 'none'; base-uri 'none'")
+
+
 def scopes(value):
     if not isinstance(value, str) or len(value) > 256:
         raise OAuthError('invalid_scope', 'Invalid scopes.')

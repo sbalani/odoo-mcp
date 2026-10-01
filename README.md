@@ -59,6 +59,10 @@ in URL query parameters. Legacy HTTP+SSE and stdio transports are not provided.
 
 ## ChatGPT web: OAuth setup (18.0.1.2.0+)
 
+Use **18.0.1.2.1 or later**: it fixes browsers blocking the consent form's
+redirect back to ChatGPT with a `form-action 'self'` CSP error. After deploying
+the update, start a new connection from ChatGPT rather than reusing the old consent page.
+
 1. Pull branch `18.0`, restart/rebuild Odoo, and **upgrade Odoo MCP Gateway in Apps**.
    Upgrading loads the new OAuth models, access controls, and administration menu.
 2. As an Odoo administrator, ensure **Settings → Technical → Parameters → System

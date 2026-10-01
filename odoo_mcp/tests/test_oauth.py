@@ -40,6 +40,7 @@ class TestMcpOAuth(HttpCase):
     def consent_form(self, params=None):
         res = self.url_open('/odoo_mcp/oauth/authorize?' + urlencode(params or self.auth_params()))
         self.assertEqual(res.status_code, 200, res.text[:1500])
+        self.assertIn("form-action 'self' https://chatgpt.com;", res.headers['Content-Security-Policy'])
         doc = html.fromstring(res.text)
         return {e.name: e.value for e in doc.xpath('//input')}, res
 

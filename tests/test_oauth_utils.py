@@ -10,6 +10,18 @@ spec.loader.exec_module(u)
 
 
 class OAuthPrimitiveTests(unittest.TestCase):
+    def test_consent_policy_allows_only_callback_origin_and_self(self):
+        policy = u.consent_csp('https://chatgpt.com/callback?ignored=;form-action%20*')
+        self.assertIn("form-action 'self' https://chatgpt.com;", policy)
+        self.assertNotIn('ignored', policy)
+        self.assertNotIn('*', policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertIn("form-action 'self' https://client.example:8443;",
+                      u.consent_csp('https://client.example:8443/callback'))
+        for bad in ('https://*.example/callback', 'https://example;evil/callback'):
+            with self.subTest(url=bad), self.assertRaises(u.OAuthError):
+                u.consent_csp(bad)
+
     def test_pkce_rfc7636_vector(self):
         verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk'
         challenge = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM'
