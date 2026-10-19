@@ -212,11 +212,11 @@ PURCHASE_LINE_SCHEMA = {'type': 'object', 'additionalProperties': False, 'proper
     'tax_ids': {'type': 'array', 'items': ID, 'maxItems': 20},
 }, 'required': ['product_id', 'quantity', 'price_unit', 'tax_ids']}
 PURCHASE_TOOLS = [
-    tool('purchase_create_from_bill', 'Create one draft RFQ from an existing vendor bill in this company. Copies quantities, units, prices, discounts, currency and taxes without changing or linking accounting lines. Rejects bills already linked to POs; retries return the existing MCP PO. For missing bill products, supply explicit line/product mappings after lookup. Does not confirm, receive, pay or send anything.', {
+    tool('purchase_create_from_bill', 'Create one draft RFQ from an existing vendor bill in this company. Copies quantities, units, prices, discounts, currency and taxes without changing or linking accounting lines. Rejects bills already linked to POs; retries return the existing MCP PO. For missing bill products, supply explicit line/product mappings after lookup, including uom_id if the bill has no unit. Does not confirm, receive, pay or send anything.', {
         'bill_id': ID,
         'line_products': {'type': 'array', 'maxItems': 100, 'items': {
             'type': 'object', 'additionalProperties': False,
-            'properties': {'line_id': ID, 'product_id': ID}, 'required': ['line_id', 'product_id']}},
+            'properties': {'line_id': ID, 'product_id': ID, 'uom_id': ID}, 'required': ['line_id', 'product_id']}},
     }, ['bill_id'], True),
     tool('purchase_create', 'Create a draft RFQ from explicitly supplied supplier invoice details. Use purchase_create_from_bill instead when the bill exists in Odoo. Reuse request_key for retries; never invent products, units or taxes. Does not confirm or receive stock.', {
         'request_key': STRING, 'partner_id': ID, 'currency_id': ID, 'partner_ref': STRING,

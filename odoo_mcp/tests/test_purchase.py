@@ -9,7 +9,7 @@ class TestMcpPurchase(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.user = new_test_user(cls.env, login='mcp_buyer', groups='base.group_user,purchase.group_purchase_user,stock.group_stock_user,account.group_account_invoice,odoo_mcp.group_mcp_purchase_write,odoo_mcp.group_mcp_product_write')
+        cls.user = new_test_user(cls.env, login='mcp_buyer', groups='base.group_user,purchase.group_purchase_manager,stock.group_stock_user,account.group_account_invoice,odoo_mcp.group_mcp_purchase_write,odoo_mcp.group_mcp_product_write')
         cls.gateway = cls.env['odoo.mcp.gateway'].with_user(cls.user).with_context(allowed_company_ids=cls.env.company.ids)
         cls.vendor = cls.env['res.partner'].create({'name': 'MCP supplier'})
         cls.unit = cls.env.ref('uom.product_uom_unit')
@@ -116,7 +116,7 @@ class TestMcpPurchase(TransactionCase):
         with self.assertRaises(ValueError):
             self.gateway._call('purchase_create_from_bill', {'bill_id': bill.id})
         result = self.gateway._call('purchase_create_from_bill', {'bill_id': bill.id,
-            'line_products': [{'line_id': line.id, 'product_id': self.product.id}]})
+            'line_products': [{'line_id': line.id, 'product_id': self.product.id, 'uom_id': self.unit.id}]})
         self.assertEqual(self.env['purchase.order'].browse(result['id']).order_line.product_id, self.product)
         self.assertFalse(line.product_id)
 

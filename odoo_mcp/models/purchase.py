@@ -103,28 +103,38 @@ class PurchaseGateway(models.AbstractModel):
             raise ValueError('line_products must contain at most 100 mappings')
         products = {}
         for mapping in mappings:
-            item = object_values(mapping, ('line_id', 'product_id'), ('line_id', 'product_id'))
+            item = object_values(mapping, ('line_id', 'product_id', 'uom_id'), ('line_id', 'product_id'))
             line_id = integer(item['line_id'], 'line_id')
             if line_id not in bill_lines.ids or line_id in products:
                 raise ValueError('Product mappings must refer to distinct lines of this bill')
-            products[line_id] = integer(item['product_id'], 'product_id')
+            integer(item['product_id'], 'product_id')
+            if 'uom_id' in item:
+                integer(item['uom_id'], 'uom_id')
+            products[line_id] = item
         lines = []
         for line in bill_lines:
-            product_id = products.get(line.id, line.product_id.id)
+            mapping = products.get(line.id, {})
+            product_id = mapping.get('product_id', line.product_id.id)
             if not product_id:
                 raise ValueError('Look up or create a product and supply line_products for bill line %s' % line.id)
             if line.product_id and product_id != line.product_id.id:
                 raise ValueError('Cannot override the product already recorded on a vendor bill')
-            if not line.product_uom_id:
-                raise ValueError('Bill line %s has no unit; review it in Odoo before conversion' % line.id)
+            uom_id = mapping.get('uom_id', line.product_uom_id.id)
+            if not uom_id:
+                raise ValueError('Bill line %s has no unit; supply an explicit uom_id in line_products' % line.id)
+            if line.product_uom_id and uom_id != line.product_uom_id.id:
+                raise ValueError('Cannot override the unit already recorded on a vendor bill')
             lines.append({'product_id': product_id, 'quantity': line.quantity,
-                          'uom_id': line.product_uom_id.id, 'price_unit': line.price_unit,
+                          'uom_id': uom_id, 'price_unit': line.price_unit,
                           'discount': line.discount, 'tax_ids': line.tax_ids.ids, 'name': line.name})
         if bill.fiscal_position_id:
             self._purchase_related('account.fiscal.position', bill.fiscal_position_id.id)
-        return self._create_purchase(bill.partner_id.id, bill.currency_id.id, bill.ref or bill.name,
+        result = self._create_purchase(bill.partner_id.id, bill.currency_id.id, bill.ref or bill.name,
             lines, mcp_source_bill_id=bill.id, origin=bill.name,
             fiscal_position_id=bill.fiscal_position_id.id or False)
+        result['source_bill_total'] = bill.amount_total
+        result['total_matches_bill'] = bill.currency_id.compare_amounts(result['amount_total'], bill.amount_total) == 0
+        return result
 
     def _execute(self, name, args):
         if name == 'purchase_create_from_bill':

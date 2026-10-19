@@ -9,7 +9,9 @@ Cloudpepper; no separate Python service or third-party Python dependency is need
 | Area | Supported operations |
 | --- | --- |
 | Sales and order lines | Read only |
-| Inventory, products, warehouses, locations, transfers, stock move lines | Read only |
+| Inventory, warehouses, locations, transfers, stock move lines | Read only |
+| Products | Read; create purchasable products with optional lot/serial tracking |
+| Purchasing | Read POs and supplier references; create draft RFQs manually or from vendor bills |
 | Lots and traceability | Read only |
 | Customer invoices, supplier bills, credit notes and invoice lines | Read only |
 | CRM | Read; create/update leads and opportunities; won/lost; archive/restore; schedule/complete activities |
@@ -94,7 +96,7 @@ the update, start a new connection from ChatGPT rather than reusing the old cons
    scoped tokens, not the Odoo password or a general-purpose Odoo API key.
 7. Select the Odoo connection in a new ChatGPT conversation and ask it to run
    `odoo_catalog`. Depending on the consenting user's groups/scopes, it will see
-   up to 12 tools.
+   up to 15 tools.
 
 An Odoo API key is **not** the OAuth client secret. The client secret identifies
 this ChatGPT connection; the interactive Odoo login chooses the user whose
@@ -245,7 +247,7 @@ Odoo application permissions:
 - **MCP: Purchase draft creation** (`group_mcp_purchase_write`): requires normal
   Purchase access; converting vendor bills also requires read access to Accounting.
 - **MCP: Product creation** (`group_mcp_product_write`): requires normal product
-  create permissions. MCP groups never grant or bypass native business ACLs.
+  create permissions (for example, Purchase Administrator). MCP groups never grant or bypass native business ACLs.
 
 Reconnect OAuth and approve `mcp.purchase.write` and/or `mcp.product.write`.
 Existing tokens do not acquire these scopes automatically. No client-secret
@@ -275,7 +277,8 @@ New tools:
   line quantities, units, prices, discounts and taxes. Repeated calls return the
   existing MCP PO, even if someone subsequently cancelled it; no replacement PO
   is created implicitly. Missing products require explicit `line_products`
-  mappings; products already present on the bill cannot be substituted.
+  mappings, including `uom_id` if the bill line has no unit; existing products
+  and units on the bill cannot be substituted.
   Credit notes, cancelled bills, existing purchase-linked bill lines, nonpositive
   quantities and incompatible units are rejected for manual review.
 - `purchase_create`: creates a draft RFQ from explicit invoice details, including
