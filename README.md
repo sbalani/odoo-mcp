@@ -232,3 +232,75 @@ Upgrading from 18.0.1.0.0: pull branch `18.0`, upgrade **Odoo MCP Gateway** in A
 then assign **MCP: To-do write access** to the integration user. Existing CRM/chat
 group assignments remain valid. To-do deadlines use `YYYY-MM-DD HH:MM:SS` in UTC
 (or `false` to clear); priority is `0` (normal) or `1` (important).
+
+## Purchase orders and product creation (18.0.1.3.0+)
+
+Upgrade **Odoo MCP Gateway** after deploying this version. It adds the standard
+`purchase_stock` dependency and a source-bill reference on purchase orders; it does
+not depend on or change SoftLife Sync. Company scoping remains unchanged.
+
+Enable the following groups on the intended Odoo user, alongside their normal
+Odoo application permissions:
+
+- **MCP: Purchase draft creation** (`group_mcp_purchase_write`): requires normal
+  Purchase access; converting vendor bills also requires read access to Accounting.
+- **MCP: Product creation** (`group_mcp_product_write`): requires normal product
+  create permissions. MCP groups never grant or bypass native business ACLs.
+
+Reconnect OAuth and approve `mcp.purchase.write` and/or `mcp.product.write`.
+Existing tokens do not acquire these scopes automatically. No client-secret
+rotation is needed. For a company-specific connection, check the company on the
+consent page before approving. Refresh ChatGPT's tool definitions after upgrading.
+
+New read resources: `purchase_orders`, `purchase_lines`, `supplier_products`,
+`units`, `product_categories`, `purchase_taxes`, and `currencies`. Product lookup
+now includes internal references, barcodes, purchase units, categories, company,
+tracking and supplier records. Invoice lookup includes supplier reference and
+creation date; invoice lines include units, discounts, taxes and existing PO links.
+Filter `invoices` by `move_type = in_invoice` and `invoice_date >= YYYY-MM-DD`
+(or `create_date` for recently entered bills), then follow `invoice_line_ids`.
+
+New tools:
+
+- `product_create`: creates a company-specific purchasable product and returns its
+  **variant** ID for PO lines. `name`, `default_code`, and `uom_id` are required.
+  Goods use `type: consu`, enable `is_storable`, and default to `tracking: lot`.
+  Explicit `serial` or `none` tracking is supported; services use `type: service`
+  and `tracking: none`. Stock and purchase units must share a unit category.
+  Existing/archived internal references and barcodes are checked before creation;
+  the tool refuses duplicates rather than silently assuming a product match.
+  It does not edit existing products or create lot numbers/stock quantities.
+- `purchase_create_from_bill`: creates a **draft RFQ** from a draft or posted
+  vendor bill in the connection's company. Copies vendor, reference, currency,
+  line quantities, units, prices, discounts and taxes. Repeated calls return the
+  existing MCP PO, even if someone subsequently cancelled it; no replacement PO
+  is created implicitly. Missing products require explicit `line_products`
+  mappings; products already present on the bill cannot be substituted.
+  Credit notes, cancelled bills, existing purchase-linked bill lines, nonpositive
+  quantities and incompatible units are rejected for manual review.
+- `purchase_create`: creates a draft RFQ from explicit invoice details, including
+  invoice information supplied to the agent outside Odoo. Requires supplier,
+  currency, supplier reference, lines, and a stable `request_key`. Each line
+  requires a product ID, quantity, price and explicit `tax_ids` (use `[]` for no
+  tax). Reuse the same key and arguments for retries; conflicting reuse is rejected.
+
+**Accounting stays read-only.** The source-bill reference is an audit reference,
+not Odoo's invoice-line purchase matching: this addon does not rewrite existing
+bills, mark PO quantities as invoiced, confirm POs, receive stock, send supplier
+emails or create/pay invoices. Review retrospective POs before confirming them
+in Odoo to avoid duplicate receipts or invoices. Actual lot codes are entered
+through the normal receipt workflow. The MCP does not download or OCR attachments;
+PDFs must be supplied/read by the agent separately.
+
+Example lot-tracked product:
+
+```json
+{"name":"product_create","arguments":{"values":{"name":"Supplier material","default_code":"MAT-001","uom_id":1,"tracking":"lot"}}}
+```
+
+Look up the correct unit ID first; `1` is illustrative. After matching products,
+convert an existing bill using:
+
+```json
+{"name":"purchase_create_from_bill","arguments":{"bill_id":123}}
+```

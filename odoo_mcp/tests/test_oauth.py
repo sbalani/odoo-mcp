@@ -22,7 +22,7 @@ class TestMcpOAuth(HttpCase):
         cls.env['ir.config_parameter'].sudo().set_param('web.base.url', 'https://odoo.example.test')
         cls.env['ir.config_parameter'].sudo().set_param('web.base.url.freeze', 'True')
         cls.user = new_test_user(cls.env, login='mcp_oauth', password='oauth-test-password',
-            groups='base.group_user,odoo_mcp.group_mcp_crm_write,odoo_mcp.group_mcp_chat_write,odoo_mcp.group_mcp_todo_write,sales_team.group_sale_salesman')
+            groups='base.group_user,odoo_mcp.group_mcp_crm_write,odoo_mcp.group_mcp_chat_write,odoo_mcp.group_mcp_todo_write,odoo_mcp.group_mcp_purchase_write,odoo_mcp.group_mcp_product_write,purchase.group_purchase_user,sales_team.group_sale_salesman')
         cls.secret = 'oauth-client-fixture-secret-not-for-production'
         cls.client = cls.env['odoo.mcp.oauth.client'].sudo().create({
             'name': 'ChatGPT test', 'active': True, 'secret_hash': digest(cls.secret),
@@ -93,7 +93,7 @@ class TestMcpOAuth(HttpCase):
         self.assertEqual(res.status_code, 200, res.text)
         res = self.access(tokens['access_token'])
         self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(len(res.json()['result']['tools']), 12)
+        self.assertEqual(len(res.json()['result']['tools']), 15)
         res = self.access(tokens['access_token'], 'tools/call', {'name': 'odoo_catalog', 'arguments': {}})
         self.assertFalse(res.json()['result']['isError'])
         grant = self.env['odoo.mcp.oauth.grant'].sudo().search([('code_hash', '=', digest(code))])
@@ -164,7 +164,7 @@ class TestMcpOAuth(HttpCase):
         self.assertNotIn('refresh_token', tokens)
         res = self.access(tokens['access_token'])
         self.assertEqual({t['name'] for t in res.json()['result']['tools']}, {'odoo_search', 'odoo_catalog', 'odoo_messages'})
-        for name in ('crm_create', 'chat_post', 'todo_create'):
+        for name in ('crm_create', 'chat_post', 'todo_create', 'purchase_create', 'product_create'):
             res = self.access(tokens['access_token'], 'tools/call', {'name': name, 'arguments': {}})
             self.assertEqual(res.json()['error']['code'], -32602)
         uid = self.env['res.users.apikeys']._check_credentials(scope='rpc', key=tokens['access_token'])

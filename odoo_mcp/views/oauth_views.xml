@@ -65,10 +65,12 @@
                 <p>Signed in as <strong t-out="user_name"/> for <strong t-out="company_name"/>.</p>
                 <p>This connection may use the following capabilities within your existing Odoo permissions:</p>
                 <ul>
-                    <li>Read sales, stock, lots, invoices, CRM, joined Discuss channels, and your assigned personal To-dos.</li>
+                    <li>Read products, purchase orders, sales, stock, lots, invoices, CRM, joined Discuss channels, and your assigned personal To-dos.</li>
                     <li t-if="'mcp.crm.write' in granted_scopes">Create and update CRM leads, opportunities and activities.</li>
                     <li t-if="'mcp.chat.write' in granted_scopes">Send Discuss messages and add internal notes to supported record chatter.</li>
                     <li t-if="'mcp.todo.write' in granted_scopes">Create, edit, complete, reopen and cancel your assigned personal To-dos.</li>
+                    <li t-if="'mcp.purchase.write' in granted_scopes">Create draft purchase orders, including from vendor bills.</li>
+                    <li t-if="'mcp.product.write' in granted_scopes">Create purchasable products, including products tracked by lot or serial number.</li>
                     <li t-if="'offline_access' in granted_scopes">Keep the connection active for up to 30 days, until you reconnect or an administrator revokes it.</li>
                 </ul>
                 <p>Sales, inventory, lots and invoice business fields remain read-only. Messages may notify channel members or followers.</p>

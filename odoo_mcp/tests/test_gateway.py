@@ -8,7 +8,7 @@ class TestGateway(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.reader = new_test_user(cls.env, login='mcp_reader', groups='base.group_user,odoo_mcp.group_mcp_user,sales_team.group_sale_salesman,stock.group_stock_user,account.group_account_readonly,project.group_project_user')
+        cls.reader = new_test_user(cls.env, login='mcp_reader', groups='base.group_user,odoo_mcp.group_mcp_user,sales_team.group_sale_salesman,stock.group_stock_user,purchase.group_purchase_user,account.group_account_readonly,project.group_project_user')
         cls.writer = new_test_user(cls.env, login='mcp_writer', groups='base.group_user,odoo_mcp.group_mcp_crm_write,odoo_mcp.group_mcp_chat_write,odoo_mcp.group_mcp_todo_write,sales_team.group_sale_salesman,project.group_project_user,account.group_account_invoice')
         cls.gateway = cls.env['odoo.mcp.gateway'].with_user(cls.writer)
         cls.lead = cls.env['crm.lead'].create({'name': 'MCP test lead', 'user_id': cls.writer.id})

@@ -2,15 +2,22 @@
 RESOURCES = {
     'sales': ('sale.order', 'name partner_id date_order state amount_untaxed amount_tax amount_total currency_id company_id user_id order_line'),
     'sale_lines': ('sale.order.line', 'order_id product_id name product_uom_qty qty_delivered qty_invoiced price_unit price_subtotal product_uom company_id'),
-    'products': ('product.product', 'name display_name default_code barcode type uom_id tracking active'),
+    'products': ('product.product', 'name display_name default_code barcode type is_storable uom_id uom_po_id tracking active purchase_ok sale_ok categ_id company_id seller_ids'),
+    'purchase_orders': ('purchase.order', 'name partner_id partner_ref state date_order date_planned currency_id company_id order_line amount_untaxed amount_tax amount_total origin mcp_source_bill_id mcp_request_key'),
+    'purchase_lines': ('purchase.order.line', 'order_id product_id name product_qty product_uom price_unit discount taxes_id date_planned price_subtotal price_total qty_received qty_invoiced company_id'),
+    'supplier_products': ('product.supplierinfo', 'partner_id product_tmpl_id product_id product_name product_code min_qty price currency_id product_uom company_id date_start date_end delay'),
+    'units': ('uom.uom', 'name category_id uom_type factor rounding active'),
+    'product_categories': ('product.category', 'name complete_name parent_id'),
+    'purchase_taxes': ('account.tax', 'name type_tax_use amount_type amount price_include active company_id'),
+    'currencies': ('res.currency', 'name symbol rounding active'),
     'inventory': ('stock.quant', 'product_id location_id lot_id quantity reserved_quantity available_quantity company_id'),
     'lots': ('stock.lot', 'name product_id product_qty company_id create_date'),
     'warehouses': ('stock.warehouse', 'name code company_id lot_stock_id'),
     'locations': ('stock.location', 'name complete_name usage location_id company_id'),
     'transfers': ('stock.picking', 'name origin state partner_id scheduled_date date_done location_id location_dest_id company_id'),
     'stock_moves': ('stock.move.line', 'picking_id product_id lot_id quantity product_uom_id location_id location_dest_id state date company_id'),
-    'invoices': ('account.move', 'name partner_id move_type state invoice_date invoice_date_due amount_untaxed amount_tax amount_total amount_residual payment_state currency_id company_id invoice_line_ids'),
-    'invoice_lines': ('account.move.line', 'move_id product_id name quantity price_unit price_subtotal price_total currency_id company_id'),
+    'invoices': ('account.move', 'name partner_id move_type state invoice_date invoice_date_due amount_untaxed amount_tax amount_total amount_residual payment_state currency_id company_id invoice_line_ids ref invoice_origin create_date write_date'),
+    'invoice_lines': ('account.move.line', 'move_id product_id name quantity price_unit price_subtotal price_total currency_id company_id product_uom_id discount tax_ids purchase_line_id'),
     'crm': ('crm.lead', 'name type active partner_id contact_name email_from phone user_id team_id stage_id priority probability expected_revenue date_deadline description company_id'),
     'crm_stages': ('crm.stage', 'name sequence is_won team_id'),
     'crm_teams': ('crm.team', 'name company_id user_id'),
@@ -189,3 +196,63 @@ def validate_arguments(definition, args):
     schema = definition['inputSchema']
     if set(args) - set(schema['properties']) or set(schema['required']) - set(args):
         raise ValueError('Unexpected or missing tool arguments')
+
+
+PRODUCT_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties': {
+    'name': STRING, 'default_code': STRING, 'barcode': STRING,
+    'type': {'type': 'string', 'enum': ['consu', 'service']},
+    'tracking': {'type': 'string', 'enum': ['lot', 'serial', 'none']},
+    'uom_id': ID, 'uom_po_id': ID, 'categ_id': ID,
+    'sale_ok': {'type': 'boolean'},
+}, 'required': ['name', 'default_code', 'uom_id']}
+PURCHASE_LINE_SCHEMA = {'type': 'object', 'additionalProperties': False, 'properties': {
+    'product_id': ID, 'quantity': {'type': 'number', 'exclusiveMinimum': 0},
+    'price_unit': {'type': 'number', 'minimum': 0}, 'uom_id': ID, 'name': STRING,
+    'discount': {'type': 'number', 'minimum': 0, 'maximum': 100},
+    'tax_ids': {'type': 'array', 'items': ID, 'maxItems': 20},
+}, 'required': ['product_id', 'quantity', 'price_unit', 'tax_ids']}
+PURCHASE_TOOLS = [
+    tool('purchase_create_from_bill', 'Create one draft RFQ from an existing vendor bill in this company. Copies quantities, units, prices, discounts, currency and taxes without changing or linking accounting lines. Rejects bills already linked to POs; retries return the existing MCP PO. For missing bill products, supply explicit line/product mappings after lookup. Does not confirm, receive, pay or send anything.', {
+        'bill_id': ID,
+        'line_products': {'type': 'array', 'maxItems': 100, 'items': {
+            'type': 'object', 'additionalProperties': False,
+            'properties': {'line_id': ID, 'product_id': ID}, 'required': ['line_id', 'product_id']}},
+    }, ['bill_id'], True),
+    tool('purchase_create', 'Create a draft RFQ from explicitly supplied supplier invoice details. Use purchase_create_from_bill instead when the bill exists in Odoo. Reuse request_key for retries; never invent products, units or taxes. Does not confirm or receive stock.', {
+        'request_key': STRING, 'partner_id': ID, 'currency_id': ID, 'partner_ref': STRING,
+        'lines': {'type': 'array', 'minItems': 1, 'maxItems': 100, 'items': PURCHASE_LINE_SCHEMA},
+    }, ['request_key', 'partner_id', 'currency_id', 'partner_ref', 'lines'], True),
+]
+PRODUCT_TOOLS = [tool('product_create', 'Create a company-specific purchasable product and its single variant. Search products and supplier_products first. Physical goods default to inventory tracking by lot; services must use tracking none. Returns the variant ID to use on purchase lines. Does not create lot numbers, quantities or receipts. Existing products cannot be edited.', {'values': PRODUCT_SCHEMA}, ['values'], True)]
+
+
+def object_values(value, allowed, required):
+    if not isinstance(value, dict) or set(value) - set(allowed) or set(required) - set(value):
+        raise ValueError('Unexpected or missing fields')
+    return dict(value)
+
+
+def finite_number(value, name, minimum=0, maximum=1e12):
+    import math
+    if type(value) not in (int, float) or not math.isfinite(value) or not minimum <= value <= maximum:
+        raise ValueError('%s must be a finite number between %s and %s' % (name, minimum, maximum))
+    return value
+
+
+def product_values(value):
+    values = object_values(value, PRODUCT_SCHEMA['properties'], PRODUCT_SCHEMA['required'])
+    for name in ('name', 'default_code', 'barcode'):
+        if name in values:
+            text_value(values[name], name, 256)
+    for name in ('uom_id', 'uom_po_id', 'categ_id'):
+        if name in values:
+            integer(values[name], name)
+    values.setdefault('type', 'consu')
+    if values['type'] not in ('consu', 'service'):
+        raise ValueError('type must be consu (goods) or service')
+    values.setdefault('tracking', 'none' if values['type'] == 'service' else 'lot')
+    if values['tracking'] not in ('none', 'lot', 'serial') or (values['type'] == 'service' and values['tracking'] != 'none'):
+        raise ValueError('Invalid product tracking')
+    if 'sale_ok' in values and type(values['sale_ok']) is not bool:
+        raise ValueError('sale_ok must be boolean')
+    return values

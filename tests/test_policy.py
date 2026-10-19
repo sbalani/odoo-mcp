@@ -31,9 +31,9 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(p.crm_values({'name': 'Valid'}, True), {'name': 'Valid'})
 
     def test_no_write_tools_for_protected_resources(self):
-        tools = p.READ_TOOLS + p.CRM_TOOLS + p.CHAT_TOOLS + p.TODO_TOOLS
+        tools = p.READ_TOOLS + p.CRM_TOOLS + p.CHAT_TOOLS + p.TODO_TOOLS + p.PURCHASE_TOOLS + p.PRODUCT_TOOLS
         mutations = [t['name'] for t in tools if not t['annotations']['readOnlyHint']]
-        self.assertTrue(all(n.startswith(('crm_', 'chat_', 'todo_')) for n in mutations))
+        self.assertTrue(all(n.startswith(('crm_', 'chat_', 'todo_', 'purchase_', 'product_')) for n in mutations))
         self.assertTrue(all(t['inputSchema']['additionalProperties'] is False for t in tools))
 
     def test_todo_values_cannot_escape_personal_scope(self):
@@ -45,6 +45,17 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(p.todo_values({'name': 'Plan', 'date_deadline': False}, True),
                          {'name': 'Plan', 'date_deadline': False})
         p.todo_values({'date_deadline': '2030-01-01 12:30:00'})
+
+    def test_product_and_purchase_validation(self):
+        base = {'name': 'Goods', 'default_code': 'SKU-1', 'uom_id': 1}
+        self.assertEqual(p.product_values(base)['tracking'], 'lot')
+        for extra in ({'company_id': 1}, {'type': 'product'}, {'tracking': 'invalid'},
+                      {'sale_ok': 1}, {'type': 'service', 'tracking': 'lot'}, {'uom_id': True}):
+            with self.subTest(extra=extra), self.assertRaises(ValueError):
+                p.product_values({**base, **extra})
+        for value in (True, float('nan'), float('inf'), -1, '12'):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                p.finite_number(value, 'quantity')
 
     def test_default_search_is_bounded(self):
         self.assertEqual(p.search_args({'resource': 'inventory'})[-2:], (50, 0))

@@ -5,8 +5,10 @@ import re
 import secrets
 from urllib.parse import urlsplit
 
-OAUTH_SCOPES = ('mcp.read', 'mcp.crm.write', 'mcp.chat.write', 'mcp.todo.write', 'offline_access')
+OAUTH_SCOPES = ('mcp.read', 'mcp.crm.write', 'mcp.chat.write', 'mcp.todo.write', 'mcp.purchase.write', 'mcp.product.write', 'offline_access')
 SCOPE_GROUPS = {
+    'mcp.purchase.write': 'odoo_mcp.group_mcp_purchase_write',
+    'mcp.product.write': 'odoo_mcp.group_mcp_product_write',
     'mcp.read': 'odoo_mcp.group_mcp_user',
     'mcp.crm.write': 'odoo_mcp.group_mcp_crm_write',
     'mcp.chat.write': 'odoo_mcp.group_mcp_chat_write',

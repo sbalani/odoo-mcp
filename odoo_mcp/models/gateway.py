@@ -7,7 +7,7 @@ from odoo import Command, models
 from odoo.exceptions import AccessError, MissingError
 from odoo.osv import expression
 
-from ..policy import (CHAT_TARGETS, CHAT_TOOLS, CRM_TOOLS, READ_TOOLS, RESOURCES, TODO_TOOLS, crm_values,
+from ..policy import (CHAT_TARGETS, CHAT_TOOLS, CRM_TOOLS, READ_TOOLS, RESOURCES, TODO_TOOLS, PURCHASE_TOOLS, PRODUCT_TOOLS, crm_values,
                       integer, search_args, text_value, todo_values, validate_arguments)
 
 _logger = logging.getLogger(__name__)
@@ -35,6 +35,10 @@ class McpGateway(models.AbstractModel):
             result += CHAT_TOOLS
         if permitted('mcp.todo.write') and self.env.user.has_group('odoo_mcp.group_mcp_todo_write'):
             result += TODO_TOOLS
+        if permitted('mcp.purchase.write') and self.env.user.has_group('odoo_mcp.group_mcp_purchase_write'):
+            result += PURCHASE_TOOLS
+        if permitted('mcp.product.write') and self.env.user.has_group('odoo_mcp.group_mcp_product_write'):
+            result += PRODUCT_TOOLS
         return result
 
     def _record(self, model, record_id, operation='read'):
@@ -72,6 +76,8 @@ class McpGateway(models.AbstractModel):
             scope = [('move_type', 'in', ['out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt'])]
         elif resource == 'invoice_lines':
             scope = [('move_id.move_type', 'in', ['out_invoice', 'out_refund', 'in_invoice', 'in_refund', 'out_receipt', 'in_receipt']), ('display_type', '=', 'product')]
+        elif resource == 'purchase_taxes':
+            scope = [('type_tax_use', '=', 'purchase'), ('company_id', '=', self.env.company.id)]
         elif resource == 'crm_activities':
             # mail.activity's own access checks still apply to the linked CRM record.
             scope = [('res_model', '=', 'crm.lead')]

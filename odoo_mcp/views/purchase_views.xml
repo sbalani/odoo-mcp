@@ -1,0 +1,12 @@
+<odoo>
+    <record id="purchase_order_mcp_source" model="ir.ui.view">
+        <field name="name">purchase.order.mcp.source</field>
+        <field name="model">purchase.order</field>
+        <field name="inherit_id" ref="purchase.purchase_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_ref']" position="after">
+                <field name="mcp_source_bill_id" readonly="1" invisible="not mcp_source_bill_id"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
