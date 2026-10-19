@@ -137,7 +137,7 @@ class TestMcpPurchase(TransactionCase):
             self.gateway._call('purchase_create', args)
 
     def test_supplier_price_does_not_override_invoice_currency_unit_or_tax(self):
-        currency = self.env.ref('base.USD')
+        currency = self.env.ref('base.EUR' if self.env.company.currency_id == self.env.ref('base.USD') else 'base.USD')
         currency.active = True
         dozen = self.env.ref('uom.product_uom_dozen')
         self.env['product.supplierinfo'].create({'partner_id': self.vendor.id,
