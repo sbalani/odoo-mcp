@@ -2,7 +2,7 @@
 RESOURCES = {
     'sales': ('sale.order', 'name partner_id date_order state amount_untaxed amount_tax amount_total currency_id company_id user_id order_line'),
     'sale_lines': ('sale.order.line', 'order_id product_id name product_uom_qty qty_delivered qty_invoiced price_unit price_subtotal product_uom company_id'),
-    'products': ('product.product', 'name display_name default_code barcode type is_storable uom_id uom_po_id tracking active purchase_ok sale_ok categ_id company_id seller_ids'),
+    'products': ('product.product', 'name display_name product_tmpl_id default_code barcode type is_storable uom_id uom_po_id tracking active purchase_ok sale_ok categ_id company_id seller_ids'),
     'purchase_orders': ('purchase.order', 'name partner_id partner_ref state date_order date_planned currency_id company_id order_line amount_untaxed amount_tax amount_total origin mcp_source_bill_id mcp_request_key'),
     'purchase_lines': ('purchase.order.line', 'order_id product_id name product_qty product_uom price_unit discount taxes_id date_planned price_subtotal price_total qty_received qty_invoiced company_id'),
     'supplier_products': ('product.supplierinfo', 'partner_id product_tmpl_id product_id product_name product_code min_qty price currency_id product_uom company_id date_start date_end delay'),

@@ -36,6 +36,7 @@ class TestMcpPurchase(TransactionCase):
         before = bill.read(['state', 'amount_total', 'write_date', 'invoice_line_ids'])[0]
         result = self.gateway._call('purchase_create_from_bill', {'bill_id': bill.id})
         order = self.env['purchase.order'].browse(result['id'])
+        self.assertTrue(result['total_matches_bill'])
         self.assertEqual(order.state, 'draft')
         self.assertEqual(order.mcp_source_bill_id, bill)
         self.assertEqual(order.company_id, bill.company_id)
@@ -134,3 +135,28 @@ class TestMcpPurchase(TransactionCase):
         args['lines'][0]['uom_id'] = self.env.ref('uom.product_uom_kgm').id
         with self.assertRaises(ValueError):
             self.gateway._call('purchase_create', args)
+
+    def test_supplier_price_does_not_override_invoice_currency_unit_or_tax(self):
+        currency = self.env.ref('base.USD')
+        currency.active = True
+        dozen = self.env.ref('uom.product_uom_dozen')
+        self.env['product.supplierinfo'].create({'partner_id': self.vendor.id,
+            'product_tmpl_id': self.product.product_tmpl_id.id, 'price': 999})
+        # Included tax amounts must remain as stated on the bill, not be added again.
+        self.tax.price_include_override = 'tax_included'
+        bill = self.bill(currency_id=currency.id)
+        bill.invoice_line_ids.write({'product_uom_id': dozen.id, 'price_unit': 132, 'discount': 10})
+        result = self.gateway._call('purchase_create_from_bill', {'bill_id': bill.id})
+        order = self.env['purchase.order'].browse(result['id'])
+        self.assertEqual(order.currency_id, currency)
+        self.assertEqual(order.order_line.product_uom, dozen)
+        self.assertEqual(order.order_line.price_unit, 132)
+        self.assertEqual(order.order_line.discount, 10)
+        self.assertAlmostEqual(order.amount_total, bill.amount_total, places=2)
+
+    def test_product_creation_requires_native_product_acl(self):
+        user = new_test_user(self.env, login='mcp_product_readonly',
+            groups='base.group_user,purchase.group_purchase_user,odoo_mcp.group_mcp_product_write')
+        with self.assertRaises(AccessError):
+            self.gateway.with_user(user)._call('product_create', {'values': {
+                'name': 'Denied', 'default_code': 'MCP-DENIED', 'uom_id': self.unit.id}})

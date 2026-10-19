@@ -33,7 +33,7 @@ Record chatter writes add internal notes only; they do not change business field
    selecting branch `18.0`. The repository root contains the `odoo_mcp` addon.
 2. Pull/rebuild the Odoo instance through Cloudpepper. Update the Apps list in
    developer mode, remove the Apps-only filter, and install **Odoo MCP Gateway**.
-   Its dependencies include Sales, Inventory, Accounting, CRM, Discuss and To-do.
+   Its dependencies include Sales, Inventory, Purchase, Accounting, CRM, Discuss and To-do.
 3. Create a dedicated **internal** integration user (never the superuser).
    Grant the ordinary Odoo application permissions required for the records it
    should access. MCP groups do not grant Sales, Accounting or other application rights.
@@ -274,7 +274,9 @@ New tools:
   It does not edit existing products or create lot numbers/stock quantities.
 - `purchase_create_from_bill`: creates a **draft RFQ** from a draft or posted
   vendor bill in the connection's company. Copies vendor, reference, currency,
-  line quantities, units, prices, discounts and taxes. Repeated calls return the
+  line quantities, units, prices, discounts and taxes. The first result includes
+  `source_bill_total` and `total_matches_bill` so the agent can flag rounding or
+  other total differences for review. Repeated calls return the
   existing MCP PO, even if someone subsequently cancelled it; no replacement PO
   is created implicitly. Missing products require explicit `line_products`
   mappings, including `uom_id` if the bill line has no unit; existing products
