@@ -241,6 +241,11 @@ Upgrade **Odoo MCP Gateway** after deploying this version. It adds the standard
 `purchase_stock` dependency and a source-bill reference on purchase orders; it does
 not depend on or change SoftLife Sync. Company scoping remains unchanged.
 
+Version 18.0.1.3.1 is a schema-repair release for deployments that pulled 18.0.1.3.0
+without upgrading the installed addon. After pulling it, refresh the Apps list and
+upgrade **Odoo MCP Gateway** even if the prior release was shown as current. This
+reconciles the stored purchase-order fields with the database schema.
+
 Enable the following groups on the intended Odoo user, alongside their normal
 Odoo application permissions:
 
